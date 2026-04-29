@@ -17,16 +17,15 @@ RUN apt-get update \
 
 WORKDIR /app
 
-# Install JS deps with cache-friendly layer ordering
+# Install ALL deps (dev + prod) so we have tsc available to build.
 COPY package.json package-lock.json* ./
-RUN npm ci --omit=dev --no-audit --no-fund || npm install --omit=dev --no-audit --no-fund
+RUN npm install --no-audit --no-fund
+
 COPY tsconfig.json ./
 COPY src ./src
 
-# Build TS → JS
-RUN npm install --no-audit --no-fund typescript@5.7.0 \
- && npx tsc \
- && npm prune --production
+# Build TS → JS, then prune devDependencies for a leaner runtime image.
+RUN npx tsc && npm prune --omit=dev
 
 # Drop ephemeral files
 RUN rm -rf node_modules/.cache /tmp/* /root/.cache
