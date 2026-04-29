@@ -38,6 +38,7 @@ type SecretKey =
   | 'INNGEST_SIGNING_KEY'
   | 'RAILWAY_WORKER_URL'
   | 'RAILWAY_WORKER_TOKEN'
+  | 'CRON_SECRET'
 
 const auditedReads = new Set<SecretKey>()
 

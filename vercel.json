@@ -1,0 +1,16 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/mine-patterns",
+      "schedule": "0 4 * * *"
+    }
+  ],
+  "functions": {
+    "src/app/api/inspo/import/route.ts": {
+      "maxDuration": 300
+    },
+    "src/app/api/cron/mine-patterns/route.ts": {
+      "maxDuration": 120
+    }
+  }
+}
