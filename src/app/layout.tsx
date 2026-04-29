@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { Nunito, Fredoka, JetBrains_Mono } from 'next/font/google'
 import { Toaster } from 'sonner'
 import AppShell from '@/components/AppShell'
+import { currentUser } from '@/lib/supabase-server'
 import './globals.css'
 
 const nunito = Nunito({
@@ -30,16 +31,24 @@ export const metadata: Metadata = {
   description: 'The content engine behind Catjack World.',
 }
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
+  // Best-effort: read the session so the topbar can show the user's email.
+  // currentUser() may throw at build time if env isn't set — swallow and render anonymously.
+  let user: { id: string; email: string | null } | null = null
+  try {
+    user = await currentUser()
+  } catch {
+    user = null
+  }
   return (
     <html
       lang="en"
       className={`${nunito.variable} ${fredoka.variable} ${jetbrains.variable} h-full antialiased`}
     >
       <body className="min-h-full">
-        <AppShell>{children}</AppShell>
+        <AppShell user={user}>{children}</AppShell>
         <Toaster
           theme="dark"
           position="top-right"

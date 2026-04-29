@@ -1,11 +1,15 @@
 'use client'
 
-import { usePathname } from 'next/navigation'
-import { Search, Bell, ChevronRight } from 'lucide-react'
+import { usePathname, useRouter } from 'next/navigation'
+import { Search, Bell, ChevronRight, LogOut } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import { cn } from '@/lib/cn'
 import { navItems } from '@/lib/nav'
+
+interface TopbarProps {
+  user?: { email: string | null } | null
+}
 
 function titleFor(pathname: string): string {
   const item = navItems.find((n) =>
@@ -14,10 +18,23 @@ function titleFor(pathname: string): string {
   return item?.label ?? 'Studio'
 }
 
-export default function Topbar() {
+export default function Topbar({ user }: TopbarProps = {}) {
   const pathname = usePathname()
+  const router = useRouter()
   const title = titleFor(pathname)
   const [scrolled, setScrolled] = useState(false)
+  const [signingOut, setSigningOut] = useState(false)
+
+  const initial = user?.email ? user.email[0].toUpperCase() : 'D'
+  const displayName = user?.email
+    ? user.email.split('@')[0]
+    : 'Daniel'
+
+  const handleSignOut = async () => {
+    setSigningOut(true)
+    await fetch('/api/auth/signout', { method: 'POST' })
+    router.replace('/login')
+  }
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 8)
@@ -86,18 +103,28 @@ export default function Topbar() {
         <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-gold-bright ring-2 ring-void" />
       </button>
 
-      {/* User pill */}
-      <div className="flex h-9 items-center gap-2 rounded-xl border border-border-subtle bg-white/[0.03] pl-1.5 pr-3 transition-colors hover:border-gold/40">
+      {/* User pill + sign out */}
+      <div className="flex h-9 items-center gap-2 rounded-xl border border-border-subtle bg-white/[0.03] pl-1.5 pr-1 transition-colors hover:border-gold/40">
         <div
           className="grid h-6 w-6 place-items-center rounded-full text-[11px] font-bold"
           style={{
             background: 'linear-gradient(135deg, var(--accent-gold) 0%, var(--accent-gold-bright) 100%)',
             color: '#0E0E15',
           }}
+          title={user?.email ?? undefined}
         >
-          D
+          {initial}
         </div>
-        <span className="text-[13px] font-semibold text-text-primary">Daniel</span>
+        <span className="text-[13px] font-semibold text-text-primary">{displayName}</span>
+        <button
+          type="button"
+          onClick={handleSignOut}
+          disabled={signingOut}
+          aria-label="Sign out"
+          className="grid h-7 w-7 place-items-center rounded-lg text-text-muted transition-colors hover:bg-white/[0.06] hover:text-text-primary disabled:opacity-50"
+        >
+          <LogOut size={13} />
+        </button>
       </div>
     </motion.header>
   )

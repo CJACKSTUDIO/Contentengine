@@ -45,10 +45,19 @@ const auditedReads = new Set<SecretKey>()
 /**
  * Read a required secret from the environment. Throws with a clear error
  * if missing — never returns an empty string.
+ *
+ * Exception: during the Next.js build phase (`NEXT_PHASE=phase-production-build`),
+ * we return a stub instead of throwing. This lets module-top-level code
+ * (e.g. inngest client construction in /api/inngest/route.ts) be evaluated
+ * during static analysis without the build process needing real secrets.
+ * At runtime, with secrets present, this branch is never hit.
  */
 export function secret(key: SecretKey): string {
   const value = process.env[key]
   if (!value) {
+    if (process.env.NEXT_PHASE === 'phase-production-build') {
+      return `BUILD_STUB_${key}`
+    }
     throw new Error(
       `[secret] Missing required env var: ${key}. ` +
         `Local dev: ensure 'op run -- npm run dev' is running. ` +

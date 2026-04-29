@@ -6,6 +6,7 @@ import {
   Library,
   Bot,
   Settings,
+  HelpCircle,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -25,4 +26,5 @@ export const navItems: NavItem[] = [
   { href: '/vault',        label: 'Vault',        Icon: Library,         stage: 6 },
   { href: '/agents',       label: 'Agents',       Icon: Bot,             stage: 7 },
   { href: '/settings',     label: 'Settings',     Icon: Settings,        stage: 8 },
+  { href: '/help',         label: 'Help',         Icon: HelpCircle,      stage: 15 },
 ]
