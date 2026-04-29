@@ -14,13 +14,16 @@ import {
   runCalendarPlanner,
   runScriptwriter,
   runDirector,
+  runCritic,
   type VideoBrief,
   type PlaybookEntry,
   type ScriptOutput,
   type DirectorOutput,
+  type CriticOutput,
 } from './agents'
 import { route } from './generators/router'
 import { stitchShots, type StitchShotInput } from './worker'
+import { synthesizeNarration } from './eleven'
 import type { AgentLogEvent } from './types'
 
 const SLOT_TIME_LABELS = ['7:00am', '12:00pm', '4:00pm', '8:00pm']
@@ -305,6 +308,19 @@ export const videoPipeline = inngest().createFunction(
       return results
     })
 
+    // ── ElevenLabs narration ─────────────────────────────────
+    const narration = await step.run('narration', async () => {
+      const out = await synthesizeNarration(script, data.draftId)
+      await appendLog(supabase, data.runId, {
+        agent: 'eleven',
+        ts: new Date().toISOString(),
+        message: out
+          ? `Narration synthesized · ~${out.estimated_seconds}s`
+          : 'No spoken lines; rendering silent',
+      })
+      return out
+    })
+
     // ── Stitch into master ───────────────────────────────────
     const master = await step.run('stitch', async () => {
       const beatDurations = script.beats.map((_b, _i, arr) =>
@@ -315,24 +331,58 @@ export const videoPipeline = inngest().createFunction(
         kind: r.output.kind,
         duration_seconds: beatDurations[r.beatIndex] ?? 3,
       }))
-      const result = await stitchShots({ draftId: data.draftId, shots })
+      const result = await stitchShots({
+        draftId: data.draftId,
+        shots,
+        audioUrl: narration?.audio_url,
+      })
       await appendLog(supabase, data.runId, {
         agent: 'stitch',
         ts: new Date().toISOString(),
-        message: `Master ready · ${result.duration_seconds}s`,
+        message: `Master ready · ${result.duration_seconds}s${narration ? ' (with narration)' : ''}`,
       })
       return result
     })
 
-    // ── Persist master + flip status ─────────────────────────
-    await step.run('persist-master', async () => {
+    // ── Critic ───────────────────────────────────────────────
+    const critique = await step.run('critic', async () => {
+      const out = await runCritic({
+        masterUrl: master.master_url,
+        script,
+        shotPlan,
+      })
+      await appendLog(supabase, data.runId, {
+        agent: 'critic',
+        ts: new Date().toISOString(),
+        message: `Verdict ${out.verdict.toUpperCase()} · score ${out.score}`,
+        detail: out.notes.slice(0, 180),
+      })
+      return out
+    })
+
+    // ── Persist master + critic + flip status ────────────────
+    // Auto-publish stays OFF by default: even an 'approve' verdict only
+    // gets the draft to needs_review. A reject hard-blocks the publish flow.
+    const finalStatus =
+      critique.verdict === 'reject' ? 'rejected' : 'needs_review'
+
+    await step.run('persist-final', async () => {
       await supabase
         .from('studio_drafts')
         .update({
-          status: 'needs_review',
+          status: finalStatus,
           master_url: master.master_url,
           thumbnail_url: master.thumbnail_url,
+          narration_url: narration?.audio_url ?? null,
+          critic_score: critique.score,
+          critic_verdict: critique.verdict,
+          critic_notes: critique.notes,
+          rejected_reason:
+            critique.verdict === 'reject'
+              ? critique.weaknesses.join(' · ').slice(0, 480)
+              : null,
           generated_at: new Date().toISOString(),
+          agent_trace: buildTrace(script, shotPlan, critique),
         })
         .eq('id', data.draftId)
     })
@@ -342,6 +392,8 @@ export const videoPipeline = inngest().createFunction(
       script,
       shotPlan,
       master,
+      critique,
+      finalStatus,
     }
   },
 )
@@ -392,8 +444,12 @@ async function appendLog(
     .eq('id', runId)
 }
 
-function buildTrace(script: ScriptOutput, shotPlan: DirectorOutput) {
-  return [
+function buildTrace(
+  script: ScriptOutput,
+  shotPlan: DirectorOutput,
+  critique?: CriticOutput,
+) {
+  const trace: Array<{ agent: string; thought: string; t: string }> = [
     {
       agent: 'Scriptwriter',
       thought: `${script.beats.length} beats, hook lands by 0:01.5`,
@@ -407,4 +463,14 @@ function buildTrace(script: ScriptOutput, shotPlan: DirectorOutput) {
       t: '0.41s',
     },
   ]
+  if (critique) {
+    trace.push({
+      agent: 'Critic',
+      thought: `${critique.verdict.toUpperCase()} · score ${critique.score}/100 · brand_fit ${(
+        critique.brand_fit * 100
+      ).toFixed(0)}%`,
+      t: '0.60s',
+    })
+  }
+  return trace
 }

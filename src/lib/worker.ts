@@ -102,6 +102,7 @@ export async function stitchShots(args: {
   shots: StitchShotInput[]
   width?: number
   height?: number
+  audioUrl?: string
 }): Promise<StitchResult> {
   const cfg = env.railwayWorker()
   const res = await fetch(`${cfg.url}/stitch`, {
@@ -115,6 +116,7 @@ export async function stitchShots(args: {
       shots: args.shots,
       width: args.width,
       height: args.height,
+      audio_url: args.audioUrl,
     }),
   })
 

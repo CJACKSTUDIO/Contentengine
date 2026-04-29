@@ -25,6 +25,8 @@ export interface StitchArgs {
   /** Output resolution. Defaults to 1080×1920 (9:16). */
   width?: number
   height?: number
+  /** Optional narration audio URL to mux onto the final master. */
+  audio_url?: string
 }
 
 export interface StitchResult {
@@ -110,16 +112,40 @@ export async function stitch(args: StitchArgs): Promise<StitchResult> {
       segmentPaths.map((p) => `file '${p.replace(/'/g, "'\\''")}'`).join('\n'),
     )
 
-    // 3. concat into final master.
-    const masterPath = join(tmp, 'master.mp4')
+    // 3. concat into a silent master first.
+    const silentMaster = join(tmp, 'master-silent.mp4')
     await execa('ffmpeg', [
       '-y',
       '-f', 'concat',
       '-safe', '0',
       '-i', listPath,
       '-c', 'copy',
-      masterPath,
+      silentMaster,
     ])
+
+    // 3b. Optional narration mux. If audio_url is supplied, download it
+    //     and overlay onto the silent master, trimming whichever is shorter.
+    let masterPath = silentMaster
+    if (args.audio_url) {
+      const audioPath = join(tmp, 'narration.mp3')
+      const aRes = await fetch(args.audio_url)
+      if (!aRes.ok) throw new Error(`fetch audio ${args.audio_url}: ${aRes.status}`)
+      await writeFile(audioPath, Buffer.from(await aRes.arrayBuffer()))
+      const muxedPath = join(tmp, 'master.mp4')
+      await execa('ffmpeg', [
+        '-y',
+        '-i', silentMaster,
+        '-i', audioPath,
+        '-map', '0:v:0',
+        '-map', '1:a:0',
+        '-c:v', 'copy',
+        '-c:a', 'aac',
+        '-b:a', '192k',
+        '-shortest',
+        muxedPath,
+      ])
+      masterPath = muxedPath
+    }
 
     // 4. upload master + first frame thumbnail.
     const masterUpload = await cloudinary.uploader.upload(masterPath, {

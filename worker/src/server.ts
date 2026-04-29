@@ -69,6 +69,7 @@ const StitchBody = z.object({
   draft_id: z.string().min(1),
   width: z.number().int().positive().optional(),
   height: z.number().int().positive().optional(),
+  audio_url: z.string().url().optional(),
   shots: z.array(z.object({
     url: z.string().url(),
     kind: z.enum(['image', 'video']),
