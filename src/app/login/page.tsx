@@ -2,7 +2,6 @@
 
 import { useState, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { motion } from 'framer-motion'
 import { Mail, Loader2, AlertCircle, CheckCircle2 } from 'lucide-react'
 import { browserClient } from '@/lib/supabase'
 
@@ -48,12 +47,7 @@ function LoginForm() {
 
   return (
     <main className="grid min-h-dvh place-items-center bg-deep px-6">
-      <motion.div
-        initial={{ opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4 }}
-        className="card-elev w-full max-w-[400px] p-8"
-      >
+      <div className="card-elev w-full max-w-[400px] p-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
         <span className="subtitle">Catjack Studio</span>
         <h1
           className="mt-1 text-[28px] leading-tight text-text-primary"
@@ -117,7 +111,7 @@ function LoginForm() {
         <p className="mt-6 text-center text-[11.5px] text-text-muted">
           Single-operator studio · access by email allow-list
         </p>
-      </motion.div>
+      </div>
     </main>
   )
 }
