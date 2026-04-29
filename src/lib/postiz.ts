@@ -122,7 +122,8 @@ class PostizClient {
     multipart = false,
   ): Promise<T> {
     const headers: Record<string, string> = {
-      Authorization: `Bearer ${this.apiKey}`,
+      // Postiz public API expects the raw key in Authorization, no Bearer prefix.
+      Authorization: this.apiKey,
       ...((init.headers as Record<string, string>) ?? {}),
     }
     if (!multipart && !headers['Content-Type'] && init.body) {
