@@ -1,0 +1,26 @@
+{
+  "name": "catjack-content-worker",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Catjack Studio · video ingestor + Cloudinary uploader. Runs on Railway.",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "dev": "tsx watch src/server.ts"
+  },
+  "dependencies": {
+    "cloudinary": "^2.5.0",
+    "express": "^5.1.0",
+    "execa": "^9.5.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.0",
+    "@types/node": "^22.10.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
