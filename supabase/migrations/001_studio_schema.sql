@@ -335,9 +335,12 @@ alter table public.studio_style_profiles        enable row level security;
 alter table public.studio_reference_assets      enable row level security;
 alter table public.studio_human_signals         enable row level security;
 
+-- Postgres has no `CREATE POLICY IF NOT EXISTS`; drop-then-create is the
+-- canonical idempotent pattern.
 do $$
 declare
   t text;
+  policy_name text;
 begin
   for t in
     select unnest(array[
@@ -355,10 +358,11 @@ begin
       'studio_human_signals'
     ])
   loop
+    policy_name := 'service_role_full_access_' || t;
+    execute format('drop policy if exists %I on public.%I;', policy_name, t);
     execute format(
-      'create policy if not exists %I on public.%I for all to service_role using (true) with check (true);',
-      'service_role_full_access_' || t,
-      t
+      'create policy %I on public.%I for all to service_role using (true) with check (true);',
+      policy_name, t
     );
   end loop;
 end $$;
