@@ -19,10 +19,12 @@ const STORAGE_KEY = 'catjack-studio:sidebar-collapsed'
 export function SidebarProvider({ children }: { children: React.ReactNode }) {
   const [collapsed, setCollapsed] = useState(false)
 
-  // Restore from localStorage on mount.
+  // Restore from localStorage on mount. The setState-in-effect rule
+  // is overly strict for this hydration pattern.
   useEffect(() => {
     if (typeof window === 'undefined') return
     const stored = window.localStorage.getItem(STORAGE_KEY)
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (stored === '1') setCollapsed(true)
   }, [])
 

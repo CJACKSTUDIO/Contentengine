@@ -5,21 +5,55 @@ import { useState } from 'react'
 import { motion } from 'framer-motion'
 import { toast } from 'sonner'
 
-export default function PasteBar() {
+interface Props {
+  /** Called after a successful import so the library refreshes. */
+  onImported?: () => void
+}
+
+export default function PasteBar({ onImported }: Props) {
   const [url, setUrl] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!url.trim()) return
     setSubmitting(true)
-    toast.success('Analyzing video', {
-      description: '~30 seconds. You\'ll see it appear in the library when done.',
+
+    const toastId = toast.loading('Analyzing video', {
+      description:
+        'yt-dlp downloads the master, Gemini analyzes hook + pacing + transcript. ~30-60s.',
     })
-    setTimeout(() => {
-      setSubmitting(false)
+
+    try {
+      const res = await fetch('/api/inspo/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: url.trim() }),
+      })
+      const data = (await res.json()) as {
+        ok: boolean
+        deduped?: boolean
+        error?: string
+      }
+      if (!res.ok || !data.ok) {
+        throw new Error(data.error ?? `Import failed (${res.status})`)
+      }
+      toast.success(data.deduped ? 'Already in library' : 'Imported · added to corpus', {
+        id: toastId,
+        description: data.deduped
+          ? 'No duplicate created.'
+          : 'Visible in the library now.',
+      })
       setUrl('')
-    }, 1200)
+      onImported?.()
+    } catch (err) {
+      toast.error('Import failed', {
+        id: toastId,
+        description: (err as Error).message,
+      })
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   return (

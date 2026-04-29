@@ -32,19 +32,35 @@ export default function AnalysisRail({ video, onClose }: Props) {
   const [contextText, setContextText] = useState('')
   const [contextSaved, setContextSaved] = useState(false)
 
-  // Reset/load context whenever a different video is opened
+  // Reset/load context whenever a different video is opened.
   useEffect(() => {
     if (video) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setContextText(video.userContext ?? '')
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setContextSaved(false)
     }
   }, [video])
 
-  const handleSaveContext = () => {
-    setContextSaved(true)
-    toast.success('Context saved', {
-      description: 'AI will read this on next playbook mining run.',
-    })
+  const handleSaveContext = async () => {
+    if (!video) return
+    try {
+      const res = await fetch(`/api/inspo/${video.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_context: contextText }),
+      })
+      const data = (await res.json()) as { ok: boolean; error?: string }
+      if (!res.ok || !data.ok) {
+        throw new Error(data.error ?? 'Save failed')
+      }
+      setContextSaved(true)
+      toast.success('Context saved', {
+        description: 'AI will read this on next playbook mining run.',
+      })
+    } catch (err) {
+      toast.error('Save failed', { description: (err as Error).message })
+    }
   }
 
   return (
@@ -223,7 +239,7 @@ export default function AnalysisRail({ video, onClose }: Props) {
                               {entry.t}
                             </span>
                             <span className="flex-1 text-[12.5px] font-semibold text-text-primary">
-                              "{entry.text}"
+                              &ldquo;{entry.text}&rdquo;
                             </span>
                             <span className="text-[10.5px] text-text-muted">{entry.style}</span>
                           </li>

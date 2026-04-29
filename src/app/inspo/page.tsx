@@ -1,12 +1,15 @@
 'use client'
 
 import { motion } from 'framer-motion'
-import { useMemo, useState } from 'react'
-import { Search, Filter } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Search, Filter, Loader2 } from 'lucide-react'
+import { toast } from 'sonner'
 import PasteBar from '@/components/inspo/PasteBar'
 import InspoCard from '@/components/inspo/InspoCard'
 import AnalysisRail from '@/components/inspo/AnalysisRail'
-import { inspoLibrary, type InspoTier } from '@/lib/fixtures'
+import { inspoRowToView } from '@/lib/inspo-mapper'
+import type { InspoVideo, InspoTier } from '@/lib/fixtures'
+import type { InspoVideoRow, CommentIntentRow } from '@/lib/types'
 import { cn } from '@/lib/cn'
 
 const TIER_OPTIONS: { id: InspoTier | 'all'; label: string }[] = [
@@ -23,38 +26,65 @@ const SORT_OPTIONS = [
   { id: 'replay', label: 'Most replayed' },
 ] as const
 
+type SortId = (typeof SORT_OPTIONS)[number]['id']
+
+interface DetailState {
+  video: InspoVideo
+  loading: boolean
+}
+
 export default function InspoPage() {
   const [tier, setTier] = useState<InspoTier | 'all'>('all')
-  const [sort, setSort] = useState<typeof SORT_OPTIONS[number]['id']>('recent')
+  const [sort, setSort] = useState<SortId>('recent')
   const [query, setQuery] = useState('')
-  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [videos, setVideos] = useState<InspoVideo[]>([])
+  const [loading, setLoading] = useState(true)
+  const [selected, setSelected] = useState<DetailState | null>(null)
 
-  const selectedVideo = selectedId
-    ? inspoLibrary.find((v) => v.id === selectedId) ?? null
-    : null
-
-  const filtered = useMemo(() => {
-    let list = [...inspoLibrary]
-    if (tier !== 'all') list = list.filter((v) => v.tier === tier)
-    if (query.trim()) {
-      const q = query.toLowerCase()
-      list = list.filter(
-        (v) =>
-          v.title.toLowerCase().includes(q) ||
-          v.channel.toLowerCase().includes(q) ||
-          v.patterns.some((p) => p.toLowerCase().includes(q)),
-      )
+  /** Reload library list. */
+  const refresh = useCallback(async () => {
+    setLoading(true)
+    try {
+      const params = new URLSearchParams()
+      if (tier !== 'all') params.set('tier', tier)
+      params.set('sort', sort)
+      if (query.trim()) params.set('q', query.trim())
+      const res = await fetch(`/api/inspo?${params.toString()}`, { cache: 'no-store' })
+      const json = (await res.json()) as { videos: InspoVideoRow[] }
+      setVideos((json.videos ?? []).map((r) => inspoRowToView(r, [])))
+    } catch (err) {
+      toast.error('Failed to load library', { description: (err as Error).message })
+    } finally {
+      setLoading(false)
     }
-    if (sort === 'ltv') list.sort((a, b) => b.likeRatio - a.likeRatio)
-    else if (sort === 'replay') list.sort((a, b) => b.replayMentions - a.replayMentions)
-    return list
   }, [tier, sort, query])
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    refresh()
+  }, [refresh])
+
+  /** Hydrate detail rail (fetch comment intents alongside row). */
+  const openDetail = useCallback(async (video: InspoVideo) => {
+    setSelected({ video, loading: true })
+    try {
+      const res = await fetch(`/api/inspo/${video.id}`, { cache: 'no-store' })
+      const json = (await res.json()) as {
+        video: InspoVideoRow
+        intents: CommentIntentRow[]
+      }
+      setSelected({ video: inspoRowToView(json.video, json.intents), loading: false })
+    } catch {
+      setSelected({ video, loading: false })
+    }
+  }, [])
+
+  const filtered = useMemo(() => videos, [videos])
 
   return (
     <>
-      <PasteBar />
+      <PasteBar onImported={refresh} />
 
-      {/* Library header */}
       <motion.section
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
@@ -62,11 +92,10 @@ export default function InspoPage() {
         className="mb-6 flex flex-wrap items-end justify-between gap-4"
       >
         <div>
-          <span className="subtitle">Library · {inspoLibrary.length} videos</span>
+          <span className="subtitle">Library · {videos.length} videos</span>
           <h2 className="h-section mt-1">Inspo corpus</h2>
         </div>
 
-        {/* Search */}
         <label className="flex h-10 w-[280px] items-center gap-2 rounded-xl border border-border-subtle bg-white/[0.03] px-3 text-[13px] text-text-secondary transition-colors focus-within:border-gold/40 focus-within:bg-white/[0.06]">
           <Search size={14} className="text-text-muted" />
           <input
@@ -79,7 +108,6 @@ export default function InspoPage() {
         </label>
       </motion.section>
 
-      {/* Filters + sort */}
       <section className="mb-6 flex flex-wrap items-center gap-3">
         <div className="flex items-center gap-1 rounded-xl border border-border-subtle bg-white/[0.03] p-1">
           <Filter size={14} className="ml-2 mr-1 text-text-muted" />
@@ -129,35 +157,34 @@ export default function InspoPage() {
         </div>
       </section>
 
-      {/* Grid */}
       <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {filtered.map((video, i) => (
-          <InspoCard
-            key={video.id}
-            video={video}
-            delay={i * 0.04}
-            onClick={() => setSelectedId(video.id)}
-          />
-        ))}
+        {loading && videos.length === 0 ? (
+          <div className="col-span-full grid place-items-center py-16">
+            <Loader2 size={20} className="animate-spin text-gold-bright" />
+            <p className="mt-2 text-[13px] text-text-muted">Loading inspo library…</p>
+          </div>
+        ) : filtered.length === 0 ? (
+          <div className="card-elev col-span-full grid place-items-center p-12 text-center">
+            <p className="text-[14px] text-text-secondary">
+              No videos yet. Paste a TikTok, YouTube Shorts, or Instagram Reel URL above.
+            </p>
+          </div>
+        ) : (
+          filtered.map((video, i) => (
+            <InspoCard
+              key={video.id}
+              video={video}
+              delay={i * 0.04}
+              onClick={() => openDetail(video)}
+            />
+          ))
+        )}
       </section>
 
-      <AnalysisRail video={selectedVideo} onClose={() => setSelectedId(null)} />
-
-      {filtered.length === 0 && (
-        <div className="card-elev mt-4 grid place-items-center p-12 text-center">
-          <p className="text-[14px] text-text-secondary">No videos match your filters.</p>
-          <button
-            type="button"
-            onClick={() => {
-              setTier('all')
-              setQuery('')
-            }}
-            className="mt-3 text-[13px] font-semibold text-gold-bright"
-          >
-            Reset filters →
-          </button>
-        </div>
-      )}
+      <AnalysisRail
+        video={selected?.video ?? null}
+        onClose={() => setSelected(null)}
+      />
     </>
   )
 }
