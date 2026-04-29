@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { pingSupabase } from '@/lib/supabase'
 import { optionalSecret } from '@/lib/op'
 import { postiz } from '@/lib/postiz'
+import { workerHealth } from '@/lib/worker'
 
 /**
  * GET /api/health
@@ -42,6 +43,21 @@ export async function GET() {
     }
   } catch (err) {
     checks.postiz = { ok: false, detail: (err as Error).message }
+  }
+
+  // Railway content worker reachability
+  if (optionalSecret('RAILWAY_WORKER_URL')) {
+    try {
+      const w = await workerHealth()
+      checks.worker = {
+        ok: w.ok,
+        detail: w.ok
+          ? `${w.service} ${w.version ?? ''} · up ${w.uptimeSeconds ?? '?'}s`.trim()
+          : 'Worker unreachable',
+      }
+    } catch (err) {
+      checks.worker = { ok: false, detail: (err as Error).message }
+    }
   }
 
   // Secret presence (no values exposed — only whether they're set)
