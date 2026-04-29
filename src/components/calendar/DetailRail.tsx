@@ -11,6 +11,7 @@ import { cn } from '@/lib/cn'
 interface Props {
   draft: DraftSlot | null
   onClose: () => void
+  onApprove?: (id: string) => void | Promise<void>
 }
 
 const PLATFORM_LABEL: Record<Platform, string> = {
@@ -19,7 +20,7 @@ const PLATFORM_LABEL: Record<Platform, string> = {
   instagram: 'Instagram',
 }
 
-export default function DetailRail({ draft, onClose }: Props) {
+export default function DetailRail({ draft, onClose, onApprove }: Props) {
   return (
     <AnimatePresence>
       {draft && (
@@ -192,8 +193,12 @@ export default function DetailRail({ draft, onClose }: Props) {
                 label="Approve"
                 tone="gold"
                 onClick={() => {
-                  toast.success(`Approved · ${draft.timeLabel}`)
-                  onClose()
+                  if (onApprove) {
+                    void onApprove(draft.id)
+                  } else {
+                    toast.success(`Approved · ${draft.timeLabel}`)
+                    onClose()
+                  }
                 }}
               />
               <ActionButton

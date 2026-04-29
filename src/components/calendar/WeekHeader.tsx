@@ -2,7 +2,7 @@
 
 import { motion } from 'framer-motion'
 import { ChevronLeft, ChevronRight, Filter, CheckCheck, Send } from 'lucide-react'
-import { calendarSlots } from '@/lib/fixtures'
+import type { DraftSlot } from '@/lib/fixtures'
 import { useMemo } from 'react'
 
 const FILTER_OPTIONS = ['All', 'Approved', 'Needs review', 'Generating', 'Rejected'] as const
@@ -12,18 +12,27 @@ interface Props {
   onFilter: (f: (typeof FILTER_OPTIONS)[number]) => void
   onApproveAll: () => void
   onPushToPostiz: () => void
+  slots: DraftSlot[]
+  weekRange: string
 }
 
-export default function WeekHeader({ filter, onFilter, onApproveAll, onPushToPostiz }: Props) {
+export default function WeekHeader({
+  filter,
+  onFilter,
+  onApproveAll,
+  onPushToPostiz,
+  slots,
+  weekRange,
+}: Props) {
   const stats = useMemo(() => {
     let approved = 0, review = 0, generating = 0
-    for (const s of calendarSlots) {
+    for (const s of slots) {
       if (s.status === 'approved') approved++
       else if (s.status === 'needs_review') review++
       else if (s.status === 'generating') generating++
     }
     return { approved, review, generating }
-  }, [])
+  }, [slots])
 
   return (
     <section className="mb-8">
@@ -38,7 +47,7 @@ export default function WeekHeader({ filter, onFilter, onApproveAll, onPushToPos
             This week
           </h1>
           <p className="mt-1 text-[13.5px] text-text-secondary">
-            Apr 28 – May 4 · {stats.approved} approved · {stats.review} need review · {stats.generating} generating
+            {weekRange} · {stats.approved} approved · {stats.review} need review · {stats.generating} generating
           </p>
         </div>
 
@@ -54,7 +63,7 @@ export default function WeekHeader({ filter, onFilter, onApproveAll, onPushToPos
             className="flex h-10 items-center rounded-xl border border-border-subtle bg-white/[0.03] px-4 text-[13px] font-semibold text-text-primary"
             style={{ fontFamily: 'var(--font-display), sans-serif' }}
           >
-            Apr 28 — May 4
+            {weekRange}
           </div>
           <button
             type="button"

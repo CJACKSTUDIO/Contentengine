@@ -37,6 +37,18 @@ export interface CatjackEvents {
   'studio/inspo.imported': {
     data: { videoId: string }
   }
+  /** A reviewer (or auto-approve) requested publish for a single draft. */
+  'studio/draft.publish.requested': {
+    data: {
+      draftId: string
+      /** ISO timestamp; if absent we publish "now". */
+      scheduledFor?: string
+      /** If true, bypass critic floor. Default: respect critic verdict. */
+      force?: boolean
+      /** Who triggered: 'human' (UI) or 'auto' (critic auto-approve). */
+      requestedBy: 'human' | 'auto'
+    }
+  }
 }
 
 let _client: Inngest | null = null

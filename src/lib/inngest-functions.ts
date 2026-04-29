@@ -24,6 +24,7 @@ import {
 import { route } from './generators/router'
 import { stitchShots, type StitchShotInput } from './worker'
 import { synthesizeNarration } from './eleven'
+import { postiz, PostizError, type PostizPlatform } from './postiz'
 import type { AgentLogEvent } from './types'
 
 const SLOT_TIME_LABELS = ['7:00am', '12:00pm', '4:00pm', '8:00pm']
@@ -398,6 +399,149 @@ export const videoPipeline = inngest().createFunction(
   },
 )
 
+/* ─── Publish a single approved draft to Postiz ───────────── */
+
+export const publishDraft = inngest().createFunction(
+  {
+    id: 'publish-draft',
+    name: 'Publish Draft (Postiz)',
+    /**
+     * Postiz upload is the slow step (we're streaming a 30-60MB MP4
+     * up to their API). Cap concurrency so we don't trip rate limits
+     * if 4 approvals fire at once.
+     */
+    concurrency: { limit: 2 },
+    triggers: [{ event: 'studio/draft.publish.requested' }],
+    retries: 3,
+  },
+  async ({ event, step }) => {
+    const { draftId, scheduledFor, force } = event.data as {
+      draftId: string
+      scheduledFor?: string
+      force?: boolean
+      requestedBy: 'human' | 'auto'
+    }
+
+    const supabase = serviceClient()
+
+    const draft = await step.run('load-draft', async () => {
+      const { data, error } = await supabase
+        .from('studio_drafts')
+        .select(
+          'id, status, platform, master_url, thumbnail_url, title, hook, captions, patterns, critic_verdict, scheduled_for, slot_time_label',
+        )
+        .eq('id', draftId)
+        .single()
+      if (error || !data) throw new Error(`load-draft ${draftId}: ${error?.message ?? 'not found'}`)
+      if (!data.master_url) throw new Error('Draft has no master_url')
+      if (!data.platform) throw new Error('Draft has no platform')
+      if (!force && data.critic_verdict === 'reject') {
+        throw new Error('Critic rejected this draft; pass force=true to override')
+      }
+      return data
+    })
+
+    // Resolve the right Postiz integration for this draft's platform.
+    const integration = await step.run('resolve-integration', async () => {
+      const integrations = await postiz().listIntegrations()
+      const match = integrations.find(
+        (i) => !i.disabled && i.identifier === (draft.platform as PostizPlatform),
+      )
+      if (!match) {
+        throw new Error(
+          `No active Postiz integration for platform ${draft.platform}`,
+        )
+      }
+      return { id: match.id, name: match.name, identifier: match.identifier }
+    })
+
+    // Download the master from Cloudinary, upload to Postiz.
+    const upload = await step.run('upload-to-postiz', async () => {
+      const res = await fetch(draft.master_url)
+      if (!res.ok) throw new Error(`fetch master: ${res.status}`)
+      const blob = await res.blob()
+      // Postiz wants a real filename so it can sniff content-type.
+      const filename = `catjack-${draftId}.mp4`
+      const result = await postiz().upload(blob, filename)
+      return result
+    })
+
+    // Build platform-tailored caption. captions JSONB is stored by
+    // the Scriptwriter as { tiktok, youtube, instagram } — fall back
+    // to the raw hook if that variant wasn't authored.
+    const caption = pickCaption(draft, integration.identifier as string)
+
+    const post = await step.run('create-post', async () => {
+      const publishDate = scheduledFor ?? new Date().toISOString()
+      try {
+        const created = await postiz().createPost({
+          type: 'schedule',
+          date: publishDate,
+          shortLink: true,
+          tags: ['catjack', 'auto'],
+          posts: [
+            {
+              integration: { id: integration.id },
+              value: [
+                {
+                  content: caption,
+                  image: [{ id: upload.id, path: upload.path }],
+                },
+              ],
+              settings: {},
+            },
+          ],
+        })
+        return { id: created.id, state: created.state, publishDate }
+      } catch (err) {
+        if (err instanceof PostizError) {
+          throw new Error(`Postiz ${err.status}: ${err.message}`)
+        }
+        throw err
+      }
+    })
+
+    // Persist published state on the draft + posted_videos history row.
+    await step.run('persist-published', async () => {
+      const now = new Date().toISOString()
+      const [{ error: dErr }, { error: pErr }] = await Promise.all([
+        supabase
+          .from('studio_drafts')
+          .update({
+            status: 'published',
+            postiz_post_id: post.id,
+            scheduled_for: post.publishDate,
+            approved_at: now,
+          })
+          .eq('id', draftId),
+        supabase.from('studio_posted_videos').upsert(
+          {
+            draft_id: draftId,
+            platform: draft.platform,
+            platform_post_id: post.id,
+            master_url: draft.master_url,
+            thumbnail_url: draft.thumbnail_url,
+            title: draft.title,
+            caption,
+            patterns: draft.patterns ?? [],
+            posted_at: post.publishDate,
+          },
+          { onConflict: 'platform,platform_post_id' },
+        ),
+      ])
+      if (dErr) throw new Error(`persist draft: ${dErr.message}`)
+      if (pErr) throw new Error(`persist posted_videos: ${pErr.message}`)
+    })
+
+    return {
+      draftId,
+      postizPostId: post.id,
+      platform: draft.platform,
+      scheduledFor: post.publishDate,
+    }
+  },
+)
+
 /* ─── Inspo-imported event handler ────────────────────────── */
 
 export const remineOnInspoImport = inngest().createFunction(
@@ -418,6 +562,7 @@ export const functions = [
   sundayBatchCron,
   batchOrchestrator,
   videoPipeline,
+  publishDraft,
   remineOnInspoImport,
 ]
 
@@ -442,6 +587,18 @@ async function appendLog(
     .from('studio_agent_runs')
     .update({ log: [...existing, entry] })
     .eq('id', runId)
+}
+
+function pickCaption(
+  draft: { captions: unknown; hook: string | null; title: string | null },
+  platform: string,
+): string {
+  const fallback = draft.hook ?? draft.title ?? 'New from Catjack'
+  if (!draft.captions || typeof draft.captions !== 'object') return fallback
+  const captions = draft.captions as Record<string, unknown>
+  const value = captions[platform]
+  if (typeof value === 'string' && value.trim().length > 0) return value
+  return fallback
 }
 
 function buildTrace(
