@@ -19,6 +19,8 @@ import {
   type ScriptOutput,
   type DirectorOutput,
 } from './agents'
+import { route } from './generators/router'
+import { stitchShots, type StitchShotInput } from './worker'
 import type { AgentLogEvent } from './types'
 
 const SLOT_TIME_LABELS = ['7:00am', '12:00pm', '4:00pm', '8:00pm']
@@ -257,31 +259,89 @@ export const videoPipeline = inngest().createFunction(
       return out
     })
 
-    // ── Persist plan to draft (Block 9 stops at needs_review) ──
+    // ── Persist plan to draft ────────────────────────────────
     await step.run('persist-plan', async () => {
       await supabase
         .from('studio_drafts')
         .update({
-          status: 'needs_review',
           title: data.brief!.theme,
           hook: script.hook,
           brief: data.brief!.why,
           patterns: script.patterns_used,
           captions: script.captions,
           agent_trace: buildTrace(script, shotPlan),
+        })
+        .eq('id', data.draftId)
+    })
+
+    // ── Generate each shot in parallel ───────────────────────
+    const shotResults = await step.run('generate-shots', async () => {
+      const beatDurations = script.beats.map((_b, i, arr) => {
+        const total = script.duration_estimate_seconds
+        return Math.max(2, Math.round(total / arr.length))
+      })
+
+      const results = await Promise.all(
+        shotPlan.shots.map(async (shot, i) => {
+          const dur = beatDurations[shot.beat_index] ?? 3
+          const r = await route(shot.generator, {
+            prompt: shot.prompt,
+            reference_assets: shot.reference_assets,
+            aesthetic_notes: shot.aesthetic_notes,
+            duration_seconds: dur,
+            draft_id: data.draftId,
+            beat_index: i,
+          })
+          return { t: shot.t, beatIndex: shot.beat_index, output: r.output, attempts: r.attempts }
+        }),
+      )
+
+      await appendLog(supabase, data.runId, {
+        agent: 'generators',
+        ts: new Date().toISOString(),
+        message: `Generated ${results.length} shots`,
+        detail: results.map((r) => r.output.generator).join(' · '),
+      })
+      return results
+    })
+
+    // ── Stitch into master ───────────────────────────────────
+    const master = await step.run('stitch', async () => {
+      const beatDurations = script.beats.map((_b, _i, arr) =>
+        Math.max(2, Math.round(script.duration_estimate_seconds / arr.length)),
+      )
+      const shots: StitchShotInput[] = shotResults.map((r) => ({
+        url: r.output.url,
+        kind: r.output.kind,
+        duration_seconds: beatDurations[r.beatIndex] ?? 3,
+      }))
+      const result = await stitchShots({ draftId: data.draftId, shots })
+      await appendLog(supabase, data.runId, {
+        agent: 'stitch',
+        ts: new Date().toISOString(),
+        message: `Master ready · ${result.duration_seconds}s`,
+      })
+      return result
+    })
+
+    // ── Persist master + flip status ─────────────────────────
+    await step.run('persist-master', async () => {
+      await supabase
+        .from('studio_drafts')
+        .update({
+          status: 'needs_review',
+          master_url: master.master_url,
+          thumbnail_url: master.thumbnail_url,
           generated_at: new Date().toISOString(),
         })
         .eq('id', data.draftId)
     })
 
-    // Block 10 picks up here: emit `studio/video.shots.ready` to dispatch
-    // the actual generators. For now we stop at the planning layer.
-
     return {
       draftId: data.draftId,
       script,
       shotPlan,
-      stoppedAt: 'plan-only (Block 10 wires generation)',
+      master,
     }
   },
 )

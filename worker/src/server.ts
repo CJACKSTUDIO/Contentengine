@@ -1,6 +1,7 @@
 import express, { type Request, type Response, type NextFunction } from 'express'
 import { z } from 'zod'
 import { ingest } from './ingest.js'
+import { stitch } from './stitch.js'
 
 const PORT = Number(process.env.PORT ?? 8080)
 const WORKER_TOKEN = process.env.WORKER_AUTH_TOKEN
@@ -59,6 +60,34 @@ app.post('/ingest', requireAuth, async (req, res) => {
     const message = err instanceof Error ? err.message : 'Ingest failed'
     // eslint-disable-next-line no-console
     console.error('[worker] ingest error:', message)
+    return res.status(502).json({ ok: false, error: message })
+  }
+})
+
+// ── Stitch endpoint ────────────────────────────────────────
+const StitchBody = z.object({
+  draft_id: z.string().min(1),
+  width: z.number().int().positive().optional(),
+  height: z.number().int().positive().optional(),
+  shots: z.array(z.object({
+    url: z.string().url(),
+    kind: z.enum(['image', 'video']),
+    duration_seconds: z.number().min(1).max(20).optional(),
+  })).min(1).max(10),
+})
+
+app.post('/stitch', requireAuth, async (req, res) => {
+  const parsed = StitchBody.safeParse(req.body)
+  if (!parsed.success) {
+    return res.status(400).json({ ok: false, error: parsed.error.message })
+  }
+  try {
+    const result = await stitch(parsed.data)
+    return res.json({ ok: true, ...result })
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Stitch failed'
+    // eslint-disable-next-line no-console
+    console.error('[worker] stitch error:', message)
     return res.status(502).json({ ok: false, error: message })
   }
 })

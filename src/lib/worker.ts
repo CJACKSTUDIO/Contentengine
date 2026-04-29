@@ -83,6 +83,65 @@ export async function workerHealth(): Promise<{
   }
 }
 
+export interface StitchShotInput {
+  url: string
+  kind: 'image' | 'video'
+  duration_seconds?: number
+}
+
+export interface StitchResult {
+  master_url: string
+  master_public_id: string
+  thumbnail_url: string
+  duration_seconds: number
+}
+
+/** Concat a sequence of generated shots into a single MP4 master via the worker. */
+export async function stitchShots(args: {
+  draftId: string
+  shots: StitchShotInput[]
+  width?: number
+  height?: number
+}): Promise<StitchResult> {
+  const cfg = env.railwayWorker()
+  const res = await fetch(`${cfg.url}/stitch`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${cfg.token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      draft_id: args.draftId,
+      shots: args.shots,
+      width: args.width,
+      height: args.height,
+    }),
+  })
+
+  let body: unknown = null
+  const text = await res.text()
+  if (text) {
+    try {
+      body = JSON.parse(text)
+    } catch {
+      body = text
+    }
+  }
+  if (!res.ok) {
+    const message =
+      body && typeof body === 'object' && 'error' in body
+        ? String((body as { error: unknown }).error)
+        : `Worker stitch failed (${res.status})`
+    throw new WorkerError(message, res.status)
+  }
+  if (!body || typeof body !== 'object' || !('ok' in body)) {
+    throw new WorkerError('Unexpected stitch response shape', 502)
+  }
+  const { ok: _ok, ...rest } = body as { ok: boolean } & StitchResult
+  void _ok
+  return rest as StitchResult
+}
+
 /** Pull a public TikTok / YouTube / Reels video and upload to Cloudinary. */
 export async function ingestUrl({ url, folder }: IngestArgs): Promise<IngestResult> {
   const cfg = env.railwayWorker()
