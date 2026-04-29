@@ -1,0 +1,253 @@
+@import "tailwindcss";
+
+/* ─────────────────────────────────────────────────────────────
+ *  Catjack Studio — design tokens
+ *  Dark cinematic studio, Seedance/Higgsfield inspired.
+ *  Pure-black canvas, gold as the hero accent, brand purple
+ *  for primary CTAs, glass cards everywhere.
+ * ───────────────────────────────────────────────────────────── */
+
+:root {
+  /* Canvas */
+  --bg-void:        #07070C;   /* near-black, no blue cast */
+  --bg-deep:        #0E0E15;
+  --bg-elev:        #14141E;
+  --bg-glass:       rgba(255, 255, 255, 0.03);
+  --bg-glass-hover: rgba(255, 255, 255, 0.05);
+
+  /* Brand */
+  --accent-gold:        #DAA520;
+  --accent-gold-bright: #F5C542;
+  --accent-gold-soft:   rgba(218, 165, 32, 0.14);
+  --accent-purple:      #7F77DD;
+  --accent-purple-soft: rgba(127, 119, 221, 0.16);
+  --accent-green:       #4ADE80;
+  --accent-amber:       #F59E0B;
+  --accent-red:         #EF4444;
+  --accent-cyan:        #22D3EE;
+
+  /* Text */
+  --text-primary:   rgba(255, 255, 255, 0.96);
+  --text-secondary: rgba(255, 255, 255, 0.62);
+  --text-muted:     rgba(255, 255, 255, 0.36);
+
+  /* Borders */
+  --border-subtle: rgba(255, 255, 255, 0.06);
+  --border-soft:   rgba(255, 255, 255, 0.12);
+  --border-gold:   rgba(218, 165, 32, 0.32);
+
+  /* Radii */
+  --radius-card:   18px;
+  --radius-btn:    12px;
+  --radius-pill:   999px;
+
+  /* Shadows */
+  --shadow-glow-gold:   0 0 0 1px rgba(218, 165, 32, 0.25), 0 12px 40px rgba(218, 165, 32, 0.18);
+  --shadow-glow-purple: 0 0 0 1px rgba(127, 119, 221, 0.25), 0 12px 40px rgba(127, 119, 221, 0.16);
+}
+
+@theme inline {
+  --color-void:     var(--bg-void);
+  --color-deep:     var(--bg-deep);
+  --color-elev:     var(--bg-elev);
+
+  --color-gold:        var(--accent-gold);
+  --color-gold-bright: var(--accent-gold-bright);
+  --color-purple:      var(--accent-purple);
+  --color-green:       var(--accent-green);
+  --color-amber:       var(--accent-amber);
+  --color-red:         var(--accent-red);
+  --color-cyan:        var(--accent-cyan);
+
+  --color-text-primary:   var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-muted:     var(--text-muted);
+
+  --color-border-subtle: var(--border-subtle);
+  --color-border-soft:   var(--border-soft);
+  --color-border-gold:   var(--border-gold);
+
+  --font-sans:    var(--font-nunito);
+  --font-display: var(--font-fredoka);
+  --font-mono:    var(--font-jetbrains);
+}
+
+html, body {
+  background: var(--bg-void);
+  color: var(--text-primary);
+  font-family: var(--font-sans), system-ui, sans-serif;
+  scroll-behavior: smooth;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.08); border-radius: 999px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.16); }
+
+:focus-visible { outline: 2px solid var(--accent-gold); outline-offset: 2px; }
+
+/* ── Subtitle treatment — the gold "video animation" label ── */
+.subtitle {
+  font-family: var(--font-display), sans-serif;
+  font-weight: 600;
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--accent-gold-bright);
+}
+
+/* ── Display / hero typography ── */
+.h-hero {
+  font-family: var(--font-display), sans-serif;
+  font-weight: 700;
+  font-size: clamp(48px, 7vw, 84px);
+  line-height: 0.98;
+  letter-spacing: -0.02em;
+  background: linear-gradient(180deg, #FFF 0%, rgba(255, 255, 255, 0.78) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.h-section {
+  font-family: var(--font-display), sans-serif;
+  font-weight: 700;
+  font-size: 28px;
+  line-height: 1.1;
+  letter-spacing: -0.01em;
+  color: var(--text-primary);
+}
+
+/* ── Card primitives ── */
+.card {
+  background: var(--bg-glass);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-card);
+  backdrop-filter: blur(12px);
+  transition: background 0.2s ease, border-color 0.2s ease, transform 0.25s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.card:hover {
+  background: var(--bg-glass-hover);
+  border-color: var(--border-soft);
+}
+.card-interactive:hover { transform: translateY(-2px); }
+
+.card-elev {
+  background: var(--bg-elev);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-card);
+}
+
+/* ── CTA buttons ── */
+.btn-gold {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 48px;
+  padding: 0 22px;
+  border-radius: var(--radius-btn);
+  font-family: var(--font-display), sans-serif;
+  font-weight: 600;
+  font-size: 14.5px;
+  letter-spacing: 0.02em;
+  background: linear-gradient(135deg, var(--accent-gold) 0%, var(--accent-gold-bright) 100%);
+  color: #0E0E15;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 8px 24px rgba(218, 165, 32, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  transition: transform 0.15s ease, box-shadow 0.2s ease;
+}
+.btn-gold:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 12px 32px rgba(218, 165, 32, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+.btn-gold:active { transform: translateY(0); }
+
+.btn-ghost {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 48px;
+  padding: 0 22px;
+  border-radius: var(--radius-btn);
+  font-family: var(--font-display), sans-serif;
+  font-weight: 600;
+  font-size: 14.5px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-primary);
+  border: 1px solid var(--border-soft);
+  transition: background 0.18s ease, border-color 0.18s ease;
+}
+.btn-ghost:hover { background: rgba(255, 255, 255, 0.08); border-color: var(--border-gold); }
+
+/* ── Status pills ── */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  padding: 0 10px;
+  border-radius: var(--radius-pill);
+  font-family: var(--font-display), sans-serif;
+  font-weight: 600;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+.pill-gold  { background: var(--accent-gold-soft);   color: var(--accent-gold-bright); border: 1px solid rgba(218, 165, 32, 0.28); }
+.pill-purple { background: var(--accent-purple-soft); color: var(--accent-purple);     border: 1px solid rgba(127, 119, 221, 0.28); }
+.pill-green { background: rgba(74, 222, 128, 0.12);  color: var(--accent-green);       border: 1px solid rgba(74, 222, 128, 0.28); }
+.pill-amber { background: rgba(245, 158, 11, 0.12);  color: var(--accent-amber);       border: 1px solid rgba(245, 158, 11, 0.28); }
+.pill-red   { background: rgba(239, 68, 68, 0.12);   color: var(--accent-red);         border: 1px solid rgba(239, 68, 68, 0.28); }
+.pill-muted { background: rgba(255, 255, 255, 0.06); color: var(--text-secondary);     border: 1px solid var(--border-subtle); }
+
+/* ── Animated underline used on nav ── */
+.nav-underline { position: relative; }
+.nav-underline::after {
+  content: "";
+  position: absolute;
+  left: 12px; right: 12px; bottom: 4px;
+  height: 2px;
+  background: var(--accent-gold-bright);
+  border-radius: 999px;
+  transform: scaleX(0);
+  transform-origin: left center;
+  transition: transform 0.25s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.nav-underline:hover::after,
+.nav-underline[data-active="true"]::after { transform: scaleX(1); }
+
+/* ── Pulsing live dot ── */
+.live-dot {
+  position: relative;
+  width: 8px; height: 8px;
+  border-radius: 999px;
+  background: var(--accent-green);
+  box-shadow: 0 0 0 0 var(--accent-green);
+  animation: live-pulse 2s ease-out infinite;
+}
+@keyframes live-pulse {
+  0%   { box-shadow: 0 0 0 0 rgba(74, 222, 128, 0.4); }
+  70%  { box-shadow: 0 0 0 8px rgba(74, 222, 128, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(74, 222, 128, 0); }
+}
+
+/* ── Gold sweep / sheen ── */
+.gold-sheen {
+  background: linear-gradient(105deg, var(--accent-gold) 0%, var(--accent-gold-bright) 50%, var(--accent-gold) 100%);
+  background-size: 200% 100%;
+  animation: sheen 3s ease-in-out infinite;
+}
+@keyframes sheen {
+  0%, 100% { background-position: 100% 50%; }
+  50%      { background-position: 0% 50%; }
+}
+
+/* ── Hero gradient overlay used on video heroes ── */
+.hero-veil {
+  background: linear-gradient(
+    180deg,
+    rgba(7, 7, 12, 0) 0%,
+    rgba(7, 7, 12, 0.45) 45%,
+    rgba(7, 7, 12, 0.92) 88%,
+    rgba(7, 7, 12, 1) 100%
+  );
+}
